@@ -1,29 +1,31 @@
 import os
+import json
 import requests
 import gradio as gr
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
 
-# ------------------ FIREBASE ADMIN FROM RENDER SECRET FILE ------------------ #
+# ------------------ FIREBASE ADMIN FROM RENDER ENV VARIABLE ------------------ #
 
-# Render mounts secret files here:
-SERVICE_ACCOUNT_PATH = "/etc/secrets/serviceAccountKey.json"
+# Read service account JSON from Render Environment Variable
+SERVICE_ACCOUNT_JSON = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+        cred_dict = json.loads(SERVICE_ACCOUNT_JSON)
+        cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
-        print("Firebase initialized using Render Secret File!")
+        print("Firebase initialized using Render Environment Variable!")
     except Exception as e:
         print("Firebase initialization failed:", e)
 
 db = firestore.client()
 
-# ------------------ API KEYS DIRECTLY IN CODE (you can move to Render env vars later) ------------------ #
+# ------------------ API KEYS FROM RENDER ENV VARS ------------------ #
 
-FIREBASE_API_KEY = "AIzaSyAbVHBfj4oN7Kz1V29aclX052iFhRgz8w8"
-MISTRAL_API_KEY = "STE2mj5jQnioh7jTxFlwQKLNDBkcOIbZ"
+FIREBASE_API_KEY = os.environ.get("FIREBASE_API_KEY")
+MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
 
 FB_SIGNUP = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
 FB_SIGNIN = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
@@ -44,7 +46,6 @@ def signup(email, password):
         })
 
         return "🎉 Signup successful! Please login."
-
     except Exception:
         return "❌ Signup Error: Could not create account."
 
@@ -151,61 +152,69 @@ button { border-radius: 10px !important; font-weight: bold !important; }
 </style>
 """
 
+
 # ------------------ GRADIO UI ------------------ #
-with gr.Blocks(css=CUSTOM_CSS, theme=gr.themes.Soft()) as app:
+def create_app():
+    with gr.Blocks(css=CUSTOM_CSS, theme=gr.themes.Soft()) as app:
 
-    session = gr.State({"logged_in": False, "uid": None, "email": None})
-    chat_history = gr.State([])
+        session = gr.State({"logged_in": False, "uid": None, "email": None})
+        chat_history = gr.State([])
 
-    gr.Markdown("## MINDEASE CHAT BOT")
+        gr.Markdown("## MINDEASE CHAT BOT")
 
-    # --- Signup ---
-    with gr.Tab("Signup"):
-        with gr.Box(elem_classes="card"):
-            s_email = gr.Textbox(label="Email")
-            s_pass = gr.Textbox(label="Password", type="password")
-            s_btn = gr.Button("Create Account")
-            s_msg = gr.Markdown()
-            s_btn.click(signup, inputs=[s_email, s_pass], outputs=s_msg)
+        # --- Signup ---
+        with gr.Tab("Signup"):
+            with gr.Box(elem_classes="card"):
+                s_email = gr.Textbox(label="Email")
+                s_pass = gr.Textbox(label="Password", type="password")
+                s_btn = gr.Button("Create Account")
+                s_msg = gr.Markdown()
+                s_btn.click(signup, inputs=[s_email, s_pass], outputs=s_msg)
 
-    # --- Login ---
-    with gr.Tab("Login"):
-        with gr.Box(elem_classes="card"):
-            l_email = gr.Textbox(label="Email")
-            l_pass = gr.Textbox(label="Password", type="password")
-            l_btn = gr.Button("Login")
-            l_msg = gr.Markdown()
-            l_btn.click(login, inputs=[l_email, l_pass, session], outputs=[l_msg, session])
+        # --- Login ---
+        with gr.Tab("Login"):
+            with gr.Box(elem_classes="card"):
+                l_email = gr.Textbox(label="Email")
+                l_pass = gr.Textbox(label="Password", type="password")
+                l_btn = gr.Button("Login")
+                l_msg = gr.Markdown()
+                l_btn.click(login, inputs=[l_email, l_pass, session], outputs=[l_msg, session])
 
-    # --- Chat ---
-    with gr.Tab("Chat"):
-        with gr.Box(elem_classes="card"):
-            chatbot = gr.Chatbot()
-            msg = gr.Textbox(label="Message")
-            send = gr.Button("Send")
-            logout_btn = gr.Button("Logout")
-            logout_msg = gr.Markdown()
+        # --- Chat ---
+        with gr.Tab("Chat"):
+            with gr.Box(elem_classes="card"):
+                chatbot = gr.Chatbot()
+                msg = gr.Textbox(label="Message")
+                send = gr.Button("Send")
+                logout_btn = gr.Button("Logout")
+                logout_msg = gr.Markdown()
 
-            send.click(mistral_chat,
-                       inputs=[msg, chat_history, session],
-                       outputs=[chatbot, chat_history])
+                send.click(mistral_chat,
+                           inputs=[msg, chat_history, session],
+                           outputs=[chatbot, chat_history])
 
-            logout_btn.click(logout,
-                             inputs=[session],
-                             outputs=[logout_msg, session, chatbot, chat_history])
+                logout_btn.click(logout,
+                                 inputs=[session],
+                                 outputs=[logout_msg, session, chatbot, chat_history])
 
-    # --- History Viewer ---
-    with gr.Tab("Chat History Viewer"):
-        with gr.Box(elem_classes="card"):
-            history_btn = gr.Button("🔄 Load Chat History")
-            history_display = gr.Markdown()
+        # --- History Viewer ---
+        with gr.Tab("Chat History Viewer"):
+            with gr.Box(elem_classes="card"):
+                history_btn = gr.Button("🔄 Load Chat History")
+                history_display = gr.Markdown()
 
-            history_btn.click(load_history,
-                              inputs=[session],
-                              outputs=[history_display])
+                history_btn.click(load_history,
+                                  inputs=[session],
+                                  outputs=[history_display])
+
+    return app
 
 
-app.launch()
+# ------------------ RENDER ENTRY POINT ------------------ #
+if __name__ == "__main__":
+    demo = create_app()
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 10000)))
+
 
 
 
