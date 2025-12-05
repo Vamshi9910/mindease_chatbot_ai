@@ -1,4 +1,4 @@
-gradio
+gradio==4.29.0
 firebase-admin
 google-cloud-firestore
 python-dotenv
@@ -6,3 +6,5 @@ requests
 fastapi
 uvicorn
 gunicorn
+pydub==0.25.1
+pyaudio==0.2.13
